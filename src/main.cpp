@@ -26,8 +26,10 @@ WiFiClient client;
 HADevice device;
 HAMqtt mqtt(client, device);
 HAFan fan(FAN_ID, HAFan::SpeedsFeature);
-HASensorNumber temp_sensor(TEMP_SENSOR_ID, HASensorNumber::PrecisionP2);
-HASensorNumber humd_sensor(HUMD_SENSOR_ID, HASensorNumber::PrecisionP2);
+HASensorNumber temp_sensor(TEMP_SENSOR_ID,
+		HASensorNumber::PrecisionP2);
+HASensorNumber humd_sensor(HUMD_SENSOR_ID,
+		HASensorNumber::PrecisionP2);
 HALight general_light(GENERAL_LIGHT_ID);
 
 #if SHT4X_PRESENT == 1
@@ -55,8 +57,21 @@ static void buzzer_set(uint8_t freq, uint16_t t1, uint16_t t2, uint16_t t3);
 
 static void usr_btn_cb()
 {
-	yellow_led_state = !yellow_led_state;
-	digitalWrite(PIN_LED_YELLOW, yellow_led_state);
+	delay(50);
+	if (state == false) {
+		state = true;
+		fan_speed = 1;
+		fan.setSpeed(fan_speed);
+		fan_state_cmd_cb(state, &fan);
+	} else {
+		if (fan_speed == 3) {
+			state = false;
+			fan_state_cmd_cb(state, &fan);
+		} else {
+			fan_speed++;
+			fan_speed_cmd_cb(fan_speed, &fan);
+		}
+	}
 }
 
 static void fan_state_cmd_cb(bool l_state, HAFan* sender)
@@ -192,11 +207,8 @@ void setup()
 	pinMode(PIN_FAN2, OUTPUT);
 	pinMode(PIN_FAN3, OUTPUT);
 	pinMode(PIN_BUZZ, OUTPUT);
-	pinMode(PIN_BTN_USR, INPUT_PULLUP);
- 
-	(void) usr_btn_cb;
-	// attachInterrupt(digitalPinToInterrupt(PIN_BTN_USR), usr_btn_cb, FALLING);
-	
+	// pinMode(PIN_BTN_USR, INPUT_PULLUP);
+ 	
 	digitalWrite(LED_POWER, LOW);
 	digitalWrite(LED_GENERAL, LOW);
 	//digitalWrite(PIN_LED_GREEN, LOW);
@@ -233,4 +245,7 @@ void loop()
 		last_time = millis();
 	}
 #endif
+	if (digitalRead(PIN_BTN_USR) == 0) {
+		usr_btn_cb();
+	}
 }
