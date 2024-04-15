@@ -1,7 +1,7 @@
 # Firmware Aire
 
 ## Description
-'Firmware Aire' is a firmware designed to control [Aire PCB](https://github.com/GuilleGonzzalez/hw-aire).
+'Firmware Aire' is a firmware designed to control [hw-aire](https://github.com/GuilleGonzzalez/hw-aire).
 It is implemented using [Arduino Home Assistant](https://github.com/dawidchyrzynski/arduino-home-assistant/tree/main) Arduino library ([docs](https://dawidchyrzynski.github.io/arduino-home-assistant/)).
 
 ## Microcontroller

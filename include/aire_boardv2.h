@@ -16,21 +16,29 @@ extern "C" {
 #define BOARD_ID 2
 
 /** GENERIC **/
-#define PIN_LED_RED    16
-#define PIN_LED_GREEN  9 // PROBLEMS!
-#define PIN_BUZZ       2
-#define PIN_BTN_USR    0 // PROBLEMS!
-#define PIN_FAN1       13
+#define PIN_BTN_USR    0
+#define PIN_FAN1       14
 #define PIN_FAN2       12
-#define PIN_FAN3       14
+#define PIN_FAN3       13
+
+/** I2C **/
+#define I2C_PRESENT 1
+#define PIN_I2C_SDA 4
+#define PIN_I2C_SCL 5
+
+/** PCA9536 **/ // I2C GPIO expander
+#define PCA9536_PRESENT 1
 
 /** LEDS **/
-#define LEDS_NUMBER       2
-#define LEDS_RGB          0
-#define LED_POWER         PIN_LED_RED
-#define LED_GENERAL       PIN_LED_YELLOW
-#define LEDS_LIST         {PIN_LED_RED, PIN_LED_YELLOW}
-#define LEDS_ACTIVE_STATE 0
+#define PIN_LED_RED    0 // PCA9536
+#define PIN_LED_YELLOW 1 // PCA9536
+#define PIN_LED_GREEN  2 // PCA9536
+
+#define LED_POWER      PIN_LED_RED
+#define LED_GENERAL    PIN_LED_YELLOW
+
+/** BUZZER **/
+#define PIN_BUZZ       2
 
 /** SHT4X **/
 #define SHT4X_PRESENT  1
@@ -38,9 +46,9 @@ extern "C" {
 #define HUMD_SENSOR    1
 
 /** BMP581 **/
-#define BMP581_PRESENT 1
+#define BMP581_PRESENT 0
 #define PRESS_SENSOR   1
-#define PIN_INT_BMP581 15
+#define PIN_INT_BMP581 16
 
 #ifdef __cplusplus
 }
