@@ -1,11 +1,17 @@
 #include <Arduino.h>
+#ifdef ESP32
+#include <WiFi.h>
+#else
 #include <ESP8266WiFi.h>
+#endif
+#include <ArduinoOTA.h>
 #include <ArduinoHA.h>
+#include <Wire.h>
 #include "Adafruit_SHT4x.h"
 #include "SparkFun_PCA9536_Arduino_Library.h"
 #include "SparkFun_BMP581_Arduino_Library.h"
 
-#include "aire_boardv2.h"
+#include "aire_boardv3.h"
 
 // #define WIFI_SSID          "TycheTools"
 // #define WIFI_PASS          "DanilleX2023"
@@ -17,15 +23,15 @@
 #define FAN_NAME           "Fan Guille"
 #define TEMP_SENSOR_NAME   "Temp Guille"
 #define HUMD_SENSOR_NAME   "Humd Guille"
-#define PRESS_SENSOR_NAME   "Press Guille"
+#define PRESS_SENSOR_NAME  "Press Guille"
 #define GENERAL_LIGHT_NAME "General Light"
 #define FW_VERSION         "0.1.0"
 #define FAN_ID             "fan_guille"
 #define TEMP_SENSOR_ID     "temp_fan_guille"
 #define HUMD_SENSOR_ID     "humd_fan_guille"
-#define PRESS_SENSOR_ID     "press_fan_guille"
+#define PRESS_SENSOR_ID    "press_fan_guille"
 #define GENERAL_LIGHT_ID   "general_light"
-#define TEMP_PERIOD        10000 // ms
+#define TEMP_PERIOD        60000 // ms
 #define BUZZ_FREQ          220
 
 WiFiClient client;
@@ -37,16 +43,16 @@ HASensorNumber humd_sensor(HUMD_SENSOR_ID, HASensorNumber::PrecisionP2);
 HASensorNumber press_sensor(PRESS_SENSOR_ID, HASensorNumber::PrecisionP2);
 HALight general_light(GENERAL_LIGHT_ID);
 
+#if I2C_PRESENT
+TwoWire i2c = TwoWire(0);
+#endif
+
 #if SHT4X_PRESENT == 1
 Adafruit_SHT4x sht4 = Adafruit_SHT4x();
 #endif
 
 #if BMP581_PRESENT == 1
 BMP581 pressureSensor;
-#endif
-
-#if PCA9536_PRESENT == 1
-PCA9536 io_exp;
 #endif
 
 /* Global variables ***********************************************************/
@@ -109,15 +115,11 @@ static void fan_state_cmd_cb(bool l_fan_state, HAFan* sender)
 	sender->setState(fan_state); // Report state back to the Home Assistant
 
 	if (fan_state) {
-#if PCA9536_PRESENT == 1
-		io_exp.digitalWrite(LED_POWER, HIGH);
-#endif
+		digitalWrite(LED_POWER, LOW);
 		set_speed(fan_speed);
 		buzzer_set(BUZZ_FREQ, 100, 100, 300); 
 	} else {
-#if PCA9536_PRESENT == 1
-		io_exp.digitalWrite(LED_POWER, LOW);
-#endif
+		digitalWrite(LED_POWER, HIGH);
 		set_speed(0);
 		buzzer_set(BUZZ_FREQ, 300, 100, 100); 
 	}
@@ -142,14 +144,10 @@ static void light_state_cmd_cb(bool general_state, HALight* sender)
 	Serial.println(general_state);
 
 	if (general_state) {
-#if PCA9536_PRESENT == 1
-		io_exp.digitalWrite(LED_GENERAL, HIGH);
-#endif
+		digitalWrite(LED_GENERAL, LOW);
 		buzzer_set(BUZZ_FREQ, 100, 0, 0); 
 	} else {
-#if PCA9536_PRESENT == 1
-		io_exp.digitalWrite(LED_GENERAL, LOW);
-#endif
+		digitalWrite(LED_GENERAL, HIGH);
 		buzzer_set(BUZZ_FREQ, 100, 0, 0); 
 	}
 }
@@ -197,6 +195,19 @@ static void buzzer_set(uint8_t freq, uint16_t t1, uint16_t t2, uint16_t t3)
 
 void setup()
 {
+	pinMode(PIN_FAN1, OUTPUT);
+	pinMode(PIN_FAN2, OUTPUT);
+	pinMode(PIN_FAN3, OUTPUT);
+	pinMode(PIN_BUZZ, OUTPUT);
+	pinMode(LED_POWER, OUTPUT);
+	pinMode(LED_GENERAL, OUTPUT);
+	pinMode(PIN_LED_RED, OUTPUT);
+	pinMode(PIN_BTN_USR, INPUT_PULLUP);
+
+	digitalWrite(LED_POWER, HIGH);
+	digitalWrite(LED_GENERAL, HIGH);
+	digitalWrite(PIN_LED_RED, HIGH);
+
 	Serial.begin(9600);
 	while (!Serial) {
 		delay(10);
@@ -208,9 +219,10 @@ void setup()
 	while (WiFi.status() != WL_CONNECTED) {
 		delay(500);
 	}
-	Serial.println("Connected!");
-
-	byte mac[WL_MAC_ADDR_LENGTH];
+	Serial.println("");
+	Serial.print("Connected to WiFi network with IP Address: ");
+	Serial.println(WiFi.localIP());
+	byte mac[6];
 	WiFi.macAddress(mac);
 	device.setUniqueId(mac, sizeof(mac));
 	device.setName(DEVICE_NAME);
@@ -239,11 +251,37 @@ void setup()
 
 	mqtt.begin(MQTT_IP);
 
+	ArduinoOTA
+		.onStart([]() {
+			String type;
+			if (ArduinoOTA.getCommand() == U_FLASH) {
+				type = "sketch";
+			} else { // U_SPIFFS
+				type = "filesystem";
+			}
+			// NOTE: if updating SPIFFS this would be the place to unmount SPIFFS using SPIFFS.end()
+			Serial.println("Start updating " + type);
+		})
+		.onEnd([]() {
+			Serial.println("\nEnd");
+		})
+		.onProgress([](unsigned int progress, unsigned int total) {
+			Serial.printf("Progress: %u%%\r", (progress / (total / 100)));
+		})
+		.onError([](ota_error_t error) {
+			Serial.printf("Error[%u]: ", error);
+	});
+
+	ArduinoOTA.begin();
+
+#if I2C_PRESENT
+	i2c.begin(PIN_I2C_SDA, PIN_I2C_SCL, 1e5);
+#endif
+
 #if SHT4X_PRESENT == 1
-	while (!sht4.begin()) {
+	while (!sht4.begin(&i2c)) {
 		Serial.println("Couldn't find SHT4x");
 		delay(1000);
-		//TODO: led error and while(true)
 	}
 	Serial.print("Found SHT4x sensor. SN 0x");
 	Serial.println(sht4.readSerial(), HEX);
@@ -252,82 +290,32 @@ void setup()
 #endif
 
 #if BMP581_PRESENT == 1
-	while (pressureSensor.beginI2C(BMP581_I2C_ADDRESS_DEFAULT) != BMP5_OK) {
+	while (pressureSensor.beginI2C(BMP581_I2C_ADDRESS_SECONDARY, i2c) != BMP5_OK) {
 		Serial.println("Couldn't find BMP581");
 		delay(1000);
 	}
 
 	Serial.println("Found BMP581 sensor");
 
-	// int8_t err = BMP5_OK;
-
-    // // Configure the BMP581 to trigger interrupts whenever a measurement is performed
-	// BMP581_InterruptConfig interruptConfig = {
-	// 	.enable   = BMP5_INTR_ENABLE,    // Enable interrupts
-	// 	.drive    = BMP5_INTR_PUSH_PULL, // Push-pull or open-drain
-	// 	.polarity = BMP5_ACTIVE_HIGH,    // Active low or high
-	// 	.mode     = BMP5_PULSED,         // Latch or pulse signal
-	// 	.sources  = {
-	// 		.drdy_en = BMP5_ENABLE,        // Trigger interrupts when data is ready
-	// 		.fifo_full_en = BMP5_DISABLE,  // Trigger interrupts when FIFO is full
-	// 		.fifo_thres_en = BMP5_DISABLE, // Trigger interrupts when FIFO threshold is reached
-	// 		.oor_press_en = BMP5_DISABLE,  // Trigger interrupts when pressure goes out of range
-	// 	}
-	// };
-    // err = pressureSensor.setInterruptConfig(&interruptConfig);
-    // if(err != BMP5_OK)
-    // {
-    //     // Interrupt settings failed, most likely a communication error (code -2)
-    //     Serial.print("Interrupt settings failed! Error code: ");
-    //     Serial.println(err);
-    // }
-
 	attachInterrupt(digitalPinToInterrupt(PIN_INT_BMP581), bmp581_cb, RISING);
-
 #endif
-
-#if PCA9536_PRESENT == 1
-	Wire.begin();
-
-	while (!io_exp.begin()) {
-		Serial.println("Couldn't find PCA9536");
-		delay(1000);
-		//TODO: led error and while(true)
-	}
-	Serial.println("Found PCA9536");
-
-	io_exp.pinMode(PIN_LED_RED, OUTPUT);
-	io_exp.pinMode(PIN_LED_YELLOW, OUTPUT);
-	io_exp.pinMode(PIN_LED_GREEN, OUTPUT);
-	io_exp.digitalWrite(LED_POWER, LOW);
-	io_exp.digitalWrite(LED_GENERAL, LOW);
-	io_exp.digitalWrite(PIN_LED_GREEN, LOW);
-#endif
-
-	pinMode(PIN_FAN1, OUTPUT);
-	pinMode(PIN_FAN2, OUTPUT);
-	pinMode(PIN_FAN3, OUTPUT);
-	pinMode(PIN_BUZZ, OUTPUT);
-	pinMode(PIN_BTN_USR, INPUT_PULLUP);
-
-	digitalWrite(LED_POWER, LOW);
-	digitalWrite(LED_GENERAL, LOW);
-	digitalWrite(PIN_LED_GREEN, LOW);
 }
 
 void loop()
 {
 	mqtt.loop();
+	ArduinoOTA.handle();
+
 #if SHT4X_PRESENT == 1
 	if ((millis() - last_time) > TEMP_PERIOD) {
 		sensors_event_t sht_humd, sht_temp;
 		sht4.getEvent(&sht_humd, &sht_temp);
-		// temp_sensor.setValue(sht_temp.temperature);
-		// humd_sensor.setValue(sht_humd.relative_humidity);
+		temp_sensor.setValue(sht_temp.temperature);
+		humd_sensor.setValue(sht_humd.relative_humidity);
 		last_time = millis();
 		Serial.print(sht_temp.temperature);
 		Serial.print("ºC ");
-		Serial.print(sht_temp.relative_humidity);
+		Serial.print(sht_humd.relative_humidity);
 		Serial.println("%rH");
 	}
 #endif
@@ -335,18 +323,17 @@ void loop()
 #if BMP581_PRESENT == 1
 	if (bmp581_ready) {
 		bmp581_ready = 0;
-
 		uint8_t interrupt_status = 0;
 		int err = pressureSensor.getInterruptStatus(&interrupt_status);
 		if (err != BMP5_OK) {
 			Serial.print("BMP581 error: ");
 			Serial.println(err);
 		}
-
 		if (interrupt_status & BMP5_INT_ASSERTED_DRDY) {
 			bmp5_sensor_data data = {0, 0};
 			int8_t err = pressureSensor.getSensorData(&data);
 			if (err == BMP5_OK) {
+				press_sensor.setValue(data.pressure);
 				Serial.println(data.pressure);
 				Serial.print(" Pa ");
 				Serial.print(data.temperature);
