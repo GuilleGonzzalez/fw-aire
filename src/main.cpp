@@ -34,6 +34,9 @@
 #define TEMP_PERIOD        60000 // ms
 #define BUZZ_FREQ          220
 
+#define LED_BRIGHT_LOW 240
+#define LED_OFF        255
+
 WiFiClient client;
 HADevice device;
 HAMqtt mqtt(client, device);
@@ -42,6 +45,8 @@ HASensorNumber temp_sensor(TEMP_SENSOR_ID, HASensorNumber::PrecisionP2);
 HASensorNumber humd_sensor(HUMD_SENSOR_ID, HASensorNumber::PrecisionP2);
 HASensorNumber press_sensor(PRESS_SENSOR_ID, HASensorNumber::PrecisionP2);
 HALight general_light(GENERAL_LIGHT_ID);
+
+// HAHVAC hvac("Guille HVAC", HAHVAC::PowerFeature | HAHVAC::TargetTemperatureFeature | HAHVAC::FanFeature);
 
 #if I2C_PRESENT
 TwoWire i2c = TwoWire(0);
@@ -71,6 +76,10 @@ static void usr_btn_cb();
 static void fan_state_cmd_cb(bool l_fan_state, HAFan* sender);
 static void fan_speed_cmd_cb(uint16_t speed, HAFan* sender);
 static void light_state_cmd_cb(bool general_state, HALight* sender);
+
+// static void hvac_power_cmd_cb(bool state, HAHVAC* sender);
+// static void hvac_fan_mode_cmd_cb(HAHVAC::FanMode mode, HAHVAC* sender);
+// static void hvac_target_temperature_cmd_cb(HANumeric temperature, HAHVAC* sender);
 
 static void set_speed(uint16_t speed);
 static void buzzer_set(uint8_t freq, uint16_t t1, uint16_t t2, uint16_t t3);
@@ -115,11 +124,11 @@ static void fan_state_cmd_cb(bool l_fan_state, HAFan* sender)
 	sender->setState(fan_state); // Report state back to the Home Assistant
 
 	if (fan_state) {
-		digitalWrite(LED_POWER, LOW);
+		analogWrite(LED_POWER, LED_BRIGHT_LOW);
 		set_speed(fan_speed);
 		buzzer_set(BUZZ_FREQ, 100, 100, 300); 
 	} else {
-		digitalWrite(LED_POWER, HIGH);
+		analogWrite(LED_POWER, LED_OFF);
 		set_speed(0);
 		buzzer_set(BUZZ_FREQ, 300, 100, 100); 
 	}
@@ -144,13 +153,37 @@ static void light_state_cmd_cb(bool general_state, HALight* sender)
 	Serial.println(general_state);
 
 	if (general_state) {
-		digitalWrite(LED_GENERAL, LOW);
+		analogWrite(LED_GENERAL, LED_BRIGHT_LOW);
 		buzzer_set(BUZZ_FREQ, 100, 0, 0); 
 	} else {
-		digitalWrite(LED_GENERAL, HIGH);
+		analogWrite(LED_GENERAL, LED_OFF);
 		buzzer_set(BUZZ_FREQ, 100, 0, 0); 
 	}
 }
+
+// static void hvac_power_cmd_cb(bool state, HAHVAC* sender)
+// {
+// 	if (state) {
+// 		Serial.println("HVAC power on");
+// 	} else {
+// 			Serial.println("HVAC power off");
+// 	}
+// }
+
+// static void hvac_fan_mode_cmd_cb(HAHVAC::FanMode mode, HAHVAC* sender)
+// {
+// 	Serial.print("Fan mode: ");
+// 	Serial.println(mode);
+// 	sender->setFanMode(mode);
+// }
+
+// static void hvac_target_temperature_cmd_cb(HANumeric temperature, HAHVAC* sender)
+// {
+// 	Serial.print("Target temp: ");
+// 	Serial.println(temperature.toFloat());
+// 	sender->setTargetTemperature(temperature);
+
+// }
 
 /* Function definitions *******************************************************/
 
@@ -204,9 +237,9 @@ void setup()
 	pinMode(PIN_LED_RED, OUTPUT);
 	pinMode(PIN_BTN_USR, INPUT_PULLUP);
 
-	digitalWrite(LED_POWER, HIGH);
-	digitalWrite(LED_GENERAL, HIGH);
-	digitalWrite(PIN_LED_RED, HIGH);
+	analogWrite(LED_POWER, LED_OFF);
+	analogWrite(LED_GENERAL, LED_OFF);
+	analogWrite(PIN_LED_RED, LED_OFF);
 
 	Serial.begin(9600);
 	while (!Serial) {
@@ -222,6 +255,7 @@ void setup()
 	Serial.println("");
 	Serial.print("Connected to WiFi network with IP Address: ");
 	Serial.println(WiFi.localIP());
+
 	byte mac[6];
 	WiFi.macAddress(mac);
 	device.setUniqueId(mac, sizeof(mac));
@@ -248,6 +282,14 @@ void setup()
 
 	general_light.setName(GENERAL_LIGHT_NAME);
 	general_light.onStateCommand(light_state_cmd_cb);
+
+	// hvac.onPowerCommand(hvac_power_cmd_cb);
+	// hvac.onFanModeCommand(hvac_fan_mode_cmd_cb);
+	// hvac.onTargetTemperatureCommand(hvac_target_temperature_cmd_cb);
+	// hvac.setName("My HVAC");
+	// hvac.setMinTemp(17);
+	// hvac.setMaxTemp(30);
+	// hvac.setTempStep(1);
 
 	mqtt.begin(MQTT_IP);
 
