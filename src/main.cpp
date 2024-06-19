@@ -143,14 +143,15 @@ static void fan_speed_cmd_cb(uint16_t speed, HAFan* sender)
 	sender->setSpeed(fan_speed);     // Report speed back to the Home Assistant
 
 	set_speed(fan_speed);
-	if (fan_speed == 0) {
-		fan_state = false;
-	} else {
-		fan_state = true;
+	if (fan_speed == 0 && fan_state == 1) {
+		fan_state_cmd_cb(false, sender);
+	} else { // P1/2/3 clicked
+		if (fan_state == 1) {
+			buzzer_set(BUZZ_FREQ, 100, 100, 100);
+		} else {
+			fan_state_cmd_cb(true, sender);
+		}
 	}
-	sender->setState(fan_state); // Report state back to the Home Assistant
-
-	buzzer_set(BUZZ_FREQ, 100, 100, 100); 
 }
 
 static void light_state_cmd_cb(bool general_state, HALight* sender)
