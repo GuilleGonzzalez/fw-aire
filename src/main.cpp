@@ -115,7 +115,6 @@ static void usr_btn_cb()
 
 static void fan_state_cmd_cb(bool l_fan_state, HAFan* sender)
 {
-
 	fan_state = l_fan_state;
 
 	Serial.print("Fan state: ");
@@ -144,6 +143,13 @@ static void fan_speed_cmd_cb(uint16_t speed, HAFan* sender)
 	sender->setSpeed(fan_speed);     // Report speed back to the Home Assistant
 
 	set_speed(fan_speed);
+	if (fan_speed == 0) {
+		fan_state = false;
+	} else {
+		fan_state = true;
+	}
+	sender->setState(fan_state); // Report state back to the Home Assistant
+
 	buzzer_set(BUZZ_FREQ, 100, 100, 100); 
 }
 
@@ -161,48 +167,21 @@ static void light_state_cmd_cb(bool general_state, HALight* sender)
 	}
 }
 
-// static void hvac_power_cmd_cb(bool state, HAHVAC* sender)
-// {
-// 	if (state) {
-// 		Serial.println("HVAC power on");
-// 	} else {
-// 			Serial.println("HVAC power off");
-// 	}
-// }
-
-// static void hvac_fan_mode_cmd_cb(HAHVAC::FanMode mode, HAHVAC* sender)
-// {
-// 	Serial.print("Fan mode: ");
-// 	Serial.println(mode);
-// 	sender->setFanMode(mode);
-// }
-
-// static void hvac_target_temperature_cmd_cb(HANumeric temperature, HAHVAC* sender)
-// {
-// 	Serial.print("Target temp: ");
-// 	Serial.println(temperature.toFloat());
-// 	sender->setTargetTemperature(temperature);
-
-// }
-
 /* Function definitions *******************************************************/
 
 static void set_speed(uint16_t speed)
 {
+	digitalWrite(PIN_FAN1, LOW);
+	digitalWrite(PIN_FAN2, LOW);
+	digitalWrite(PIN_FAN3, LOW);
 	switch (speed) {
 	case 1:
-		digitalWrite(PIN_FAN2, LOW);
-		digitalWrite(PIN_FAN3, LOW);
 		digitalWrite(PIN_FAN1, HIGH);
 		break;
 	case 2:
-		digitalWrite(PIN_FAN1, LOW);
-		digitalWrite(PIN_FAN3, LOW);
 		digitalWrite(PIN_FAN2, HIGH);
 		break;
 	case 3:
-		digitalWrite(PIN_FAN1, LOW);
-		digitalWrite(PIN_FAN2, LOW);
 		digitalWrite(PIN_FAN3, HIGH);
 		break;
 	default:
@@ -282,14 +261,6 @@ void setup()
 
 	general_light.setName(GENERAL_LIGHT_NAME);
 	general_light.onStateCommand(light_state_cmd_cb);
-
-	// hvac.onPowerCommand(hvac_power_cmd_cb);
-	// hvac.onFanModeCommand(hvac_fan_mode_cmd_cb);
-	// hvac.onTargetTemperatureCommand(hvac_target_temperature_cmd_cb);
-	// hvac.setName("My HVAC");
-	// hvac.setMinTemp(17);
-	// hvac.setMaxTemp(30);
-	// hvac.setTempStep(1);
 
 	mqtt.begin(MQTT_IP);
 
